@@ -43,6 +43,12 @@ fn main() {
     if let Some(pid) = args.iter().position(|a| a == "--wait-pid").and_then(|i| args.get(i + 1)).and_then(|p| p.parse().ok()) {
         berklin_core::update::wait_for_pid(pid);
     }
+    if berklin_core::power::in_app_package()
+        && std::env::var_os("BERKLIN_ALLOW_PACKAGED").is_none()
+        && berklin_core::power::relaunch_outside_package()
+    {
+        return;
+    }
     let hidden = args.iter().any(|a| a == "--hidden");
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app)))

@@ -1,10 +1,10 @@
 {
   "name": "berklin-relay",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
-  "main": "relay.js",
+  "main": "supervisor.js",
   "scripts": {
-    "start": "node relay.js"
+    "start": "node supervisor.js"
   },
   "engines": {
     "node": ">=18"

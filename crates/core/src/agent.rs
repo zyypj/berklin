@@ -885,6 +885,22 @@ impl Agent {
                     .map_err(|e| e.to_string())??;
                 Ok(self.config_view())
             }
+            "power.get" if self.is_local(conn) => {
+                let lid = tokio::task::spawn_blocking(crate::power::lid_actions).await.ok().flatten();
+                Ok(json!({
+                    "keepAwake": self.cfg.read().keep_awake,
+                    "lidAc": lid.map(|l| l.0),
+                    "lidDc": lid.map(|l| l.1),
+                }))
+            }
+            "power.lid" if self.is_local(conn) => {
+                let awake = v.get("awake").and_then(Value::as_bool).unwrap_or(false);
+                tokio::task::spawn_blocking(move || crate::power::set_lid_stay_awake_on_ac(awake))
+                    .await
+                    .map_err(|e| e.to_string())??;
+                let lid = tokio::task::spawn_blocking(crate::power::lid_actions).await.ok().flatten();
+                Ok(json!({ "keepAwake": self.cfg.read().keep_awake, "lidAc": lid.map(|l| l.0), "lidDc": lid.map(|l| l.1) }))
+            }
             "update.check" if self.is_local(conn) => {
                 let st = crate::update::check(self).await;
                 Ok(json!(st))
@@ -974,6 +990,8 @@ impl Agent {
             "relayOnline": self.relay_online.load(Ordering::Relaxed),
             "integration": status,
             "autoUpdate": cfg.auto_update,
+            "keepAwake": cfg.keep_awake,
+            "dataDir": self.paths.dir.to_string_lossy(),
             "version": crate::update::VERSION,
             "update": self.update.lock().clone(),
         })
@@ -1013,6 +1031,9 @@ impl Agent {
             }
             if let Some(v) = p.get("autoUpdate").and_then(Value::as_bool) {
                 cfg.auto_update = v;
+            }
+            if let Some(v) = p.get("keepAwake").and_then(Value::as_bool) {
+                cfg.keep_awake = v;
             }
             cfg.save(&self.paths);
         }

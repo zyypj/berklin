@@ -878,6 +878,62 @@ function Schedules() {
   );
 }
 
+function PowerCard() {
+  const [p, setP] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    req("power.get").then(setP).catch(fail);
+  }, []);
+  if (!p) return null;
+  const lidAwake = p.lidAc === 0;
+  const setKeep = (v) =>
+    req("config.set", { config: { keepAwake: v } })
+      .then(() => setP({ ...p, keepAwake: v }))
+      .catch(fail);
+  const setLid = (awake) => {
+    setBusy(true);
+    req("power.lid", { awake })
+      .then((r) => {
+        setP(r);
+        toast(awake ? "Fechar a tampa na tomada não suspende mais" : "Fechar a tampa volta a suspender");
+      })
+      .catch(fail)
+      .finally(() => setBusy(false));
+  };
+  return (
+    <section class="card">
+      <h2>Energia</h2>
+      <p class="muted">
+        Com o PC suspenso nada roda: nem o Claude, nem o Berklin. Para responder pelo celular com o notebook fechado, o PC precisa continuar ligado (a tela pode
+        apagar).
+      </p>
+      <label class="check">
+        <input type="checkbox" checked={p.keepAwake} onChange={(e) => setKeep(e.currentTarget.checked)} />
+        Impedir a suspensão automática enquanto o Berklin estiver aberto
+      </label>
+      <div class="row">
+        <span class={"chip " + (lidAwake ? "ok" : "bad")}>
+          Tampa fechada na tomada: {p.lidAc === 0 ? "não faz nada" : p.lidAc === 1 ? "suspende" : p.lidAc === 2 ? "hiberna" : p.lidAc === 3 ? "desliga" : "?"}
+        </span>
+        <span class="chip">
+          Na bateria: {p.lidDc === 0 ? "não faz nada" : p.lidDc === 1 ? "suspende" : p.lidDc === 2 ? "hiberna" : p.lidDc === 3 ? "desliga" : "?"}
+        </span>
+      </div>
+      <div class="row-end">
+        {lidAwake ? (
+          <button type="button" class="btn ghost" disabled={busy} onClick={() => setLid(false)}>
+            Voltar a suspender ao fechar a tampa
+          </button>
+        ) : (
+          <button type="button" class="btn primary" disabled={busy} onClick={() => setLid(true)}>
+            Não suspender ao fechar a tampa (na tomada)
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function WindowsSettings() {
   const [cfg, setCfg] = useState(null);
   const [form, setForm] = useState(null);
@@ -989,6 +1045,7 @@ function WindowsSettings() {
           <button type="button" class="btn primary" disabled={busy} onClick={save}>Salvar</button>
         </div>
       </section>
+      <PowerCard />
       <section class="card">
         <h2>Integração com o Claude Code</h2>
         <div class="row">

@@ -10,7 +10,7 @@ fn data_dir() -> PathBuf {
     if let Some(d) = std::env::var_os("BERKLIN_DATA_DIR") {
         return PathBuf::from(d);
     }
-    std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_default().join("Berklin")
+    std::env::var_os("USERPROFILE").map(PathBuf::from).unwrap_or_default().join(".berklin")
 }
 
 fn port() -> u16 {

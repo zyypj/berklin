@@ -177,8 +177,10 @@ const heartbeat = setInterval(() => {
 
 wss.on("close", () => clearInterval(heartbeat));
 
+const VERSION = typeof __BERKLIN_VERSION__ === "string" ? __BERKLIN_VERSION__ : "dev";
+
 server.listen(PORT, HOST, () => {
-  console.log(`berklin relay rodando em ${HOST}:${PORT}`);
+  console.log(`berklin relay ${VERSION} rodando em ${HOST}:${PORT}`);
 });
 
 process.stdin.setEncoding("utf8");

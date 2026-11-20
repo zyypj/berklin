@@ -41,6 +41,11 @@ Tudo fica em [Releases](https://github.com/zyypj/berklin/releases/latest):
 
 - **Windows:** o app consulta a última release a cada 6 horas, baixa o zip e troca os executáveis sozinho quando nada estiver esperando você. Dá para desligar ou forçar em **Ajustes → Atualizações**.
 - **Android:** o app consulta a cada 6 horas, baixa o APK e mostra uma notificação; um toque instala (o Android sempre pede confirmação). Na primeira vez, permita que o Berklin instale apps.
+- **Relay:** o `server.js` roda um supervisor que mantém o relay num processo filho, consulta a release a cada 6 horas, valida o arquivo novo com `node --check`, troca e reinicia só o processo do relay (o servidor no Pterodactyl continua ligado). Digite `update` no console para forçar; `BERKLIN_RELAY_AUTOUPDATE=0` desliga.
+
+### PC com a tampa fechada
+
+Suspenso, o PC não roda nada (nem o Claude). Em **Ajustes → Energia** o Berklin impede a suspensão automática enquanto está aberto e tem um botão que faz o Windows não suspender ao fechar a tampa quando o notebook está na tomada. A tela continua podendo apagar.
 
 ## Instalação
 
@@ -98,7 +103,7 @@ Para gerar os arquivos de uma release: `scripts\release.ps1` (saída em `dist-re
 
 Variáveis úteis para testes: `BERKLIN_DATA_DIR` (pasta de dados isolada), `BERKLIN_NO_AUTOINSTALL=1` (não mexe nos hooks), `BERKLIN_IGNORE_IDLE=1` (desliga o modo ausente automático).
 
-Os dados ficam em `%APPDATA%\Berklin` (`config.json`, `schedules.json`, `index.json`, `berklin.log`).
+Os dados ficam em `%USERPROFILE%\.berklin` (`config.json`, `schedules.json`, `index.json`, `berklin.log`). Não é `AppData` de propósito: apps empacotados (como o Claude desktop) redirecionam o `AppData` dos processos que abrem, e o Berklin aberto por eles enxergaria outra config. Pelo mesmo motivo, se o Berklin for aberto de dentro de um app empacotado ele se reabre pelo Explorer.
 
 ## Limites conhecidos
 

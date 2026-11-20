@@ -23,6 +23,7 @@ pub struct Config {
     pub default_mode: String,
     pub auto_update: bool,
     pub last_version: String,
+    pub keep_awake: bool,
 }
 
 impl Default for Config {
@@ -41,6 +42,7 @@ impl Default for Config {
             default_mode: "default".into(),
             auto_update: true,
             last_version: String::new(),
+            keep_awake: true,
         }
     }
 }
@@ -51,6 +53,20 @@ pub fn random_b64(n: usize) -> String {
     URL_SAFE_NO_PAD.encode(b)
 }
 
+fn migrate_from_appdata(dir: &std::path::Path) {
+    if dir.join("config.json").is_file() {
+        return;
+    }
+    let Some(old) = dirs::config_dir().map(|d| d.join("Berklin")) else { return };
+    if !old.join("config.json").is_file() {
+        return;
+    }
+    let _ = std::fs::create_dir_all(dir);
+    for name in ["config.json", "schedules.json", "index.json"] {
+        let _ = std::fs::copy(old.join(name), dir.join(name));
+    }
+}
+
 #[derive(Clone)]
 pub struct Paths {
     pub dir: PathBuf,
@@ -58,9 +74,14 @@ pub struct Paths {
 
 impl Paths {
     pub fn new() -> Self {
-        let dir = std::env::var_os("BERKLIN_DATA_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Berklin"));
+        let dir = match std::env::var_os("BERKLIN_DATA_DIR") {
+            Some(d) => PathBuf::from(d),
+            None => {
+                let dir = dirs::home_dir().unwrap_or_else(std::env::temp_dir).join(".berklin");
+                migrate_from_appdata(&dir);
+                dir
+            }
+        };
         let _ = std::fs::create_dir_all(&dir);
         Paths { dir }
     }

@@ -3,6 +3,7 @@ pub mod away;
 pub mod config;
 pub mod install;
 pub mod model;
+pub mod power;
 pub mod relay;
 pub mod runner;
 pub mod scheduler;
@@ -42,6 +43,7 @@ pub async fn start(hook_exe: PathBuf) -> Result<Arc<Agent>, String> {
     tokio::spawn(scheduler::run(agent.clone()));
     tokio::spawn(away::run(agent.clone()));
     tokio::spawn(update::run(agent.clone()));
+    power::spawn_keep_awake(agent.clone());
 
     let auto_install = std::env::var_os("BERKLIN_NO_AUTOINSTALL").is_none();
     if auto_install && !install::hooks_installed(&agent) && agent.hook_exe.is_file() {
