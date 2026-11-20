@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Berklin</title>
+<style>
+html,body{margin:0;height:100%;background:#0e0e10;color:#e8e8ea;font:16px/1.4 system-ui,sans-serif}
+main{padding:24px;display:flex;flex-direction:column;gap:12px}
+h1{font-size:22px;margin:0}
+p{margin:0;color:#a0a0a8}
+textarea{width:100%;box-sizing:border-box;min-height:90px;background:#1a1a1e;color:inherit;border:1px solid #333;border-radius:8px;padding:8px}
+button{background:#d97757;color:#fff;border:0;border-radius:8px;padding:10px 14px;font-size:15px}
+pre{white-space:pre-wrap;word-break:break-all;font-size:12px;color:#8a8a92;max-height:40vh;overflow:auto}
+</style>
+</head>
+<body>
+<main>
+<h1>Berklin</h1>
+<p id="state">Interface ainda n&atilde;o empacotada.</p>
+<textarea id="link" placeholder="berklin://pair?..."></textarea>
+<button id="pair">Parear</button>
+<button id="battery">Ignorar otimiza&ccedil;&atilde;o de bateria</button>
+<pre id="log"></pre>
+</main>
+<script>
+(function () {
+  var native = window.BerklinNative;
+  var stateLine = document.getElementById("state");
+  var logBox = document.getElementById("log");
+  function appendLog(text) {
+    logBox.textContent = (text + "\n" + logBox.textContent).slice(0, 20000);
+  }
+  function showConfig() {
+    if (!native) { stateLine.textContent = "Ponte nativa indisponível."; return; }
+    var config = JSON.parse(native.config());
+    stateLine.textContent = config.paired ? "Pareado com " + config.pcName : "Não pareado.";
+  }
+  window.__berklin = {
+    onMessage: function (json) { appendLog(typeof json === "string" ? json : JSON.stringify(json)); },
+    onStatus: function (json) { appendLog("status " + (typeof json === "string" ? json : JSON.stringify(json))); showConfig(); },
+    onOpen: function (sid) { appendLog("open " + sid); },
+    onBack: function () { return false; }
+  };
+  document.getElementById("pair").onclick = function () {
+    if (native && native.pair(document.getElementById("link").value.trim())) showConfig();
+  };
+  document.getElementById("battery").onclick = function () { if (native) native.batterySettings(); };
+  showConfig();
+  if (native && JSON.parse(native.config()).paired) {
+    native.send(JSON.stringify({ id: 1, op: "hello" }));
+  }
+})();
+</script>
+</body>
+</html>

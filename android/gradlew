@@ -1,0 +1,40 @@
+#!/bin/sh
+set -e
+
+app_path=$0
+while [ -h "$app_path" ]; do
+    link_target=$(ls -ld "$app_path" | sed 's/.* -> //')
+    case $link_target in
+        /*) app_path=$link_target ;;
+        *) app_path=${app_path%/*}/$link_target ;;
+    esac
+done
+APP_HOME=$(cd "${app_path%/*}" > /dev/null && pwd -P)
+APP_BASE_NAME=${0##*/}
+
+if [ -n "$JAVA_HOME" ]; then
+    JAVACMD=$JAVA_HOME/bin/java
+    if [ ! -x "$JAVACMD" ]; then
+        echo "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME" >&2
+        exit 1
+    fi
+else
+    JAVACMD=java
+    if ! command -v java > /dev/null 2>&1; then
+        echo "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH." >&2
+        exit 1
+    fi
+fi
+
+WRAPPER_JAR=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+case $(uname 2> /dev/null) in
+    CYGWIN* | MINGW* | MSYS*)
+        if command -v cygpath > /dev/null 2>&1; then
+            APP_HOME=$(cygpath --path --mixed "$APP_HOME")
+            WRAPPER_JAR=$(cygpath --path --mixed "$WRAPPER_JAR")
+            JAVACMD=$(cygpath --unix "$JAVACMD")
+        fi
+        ;;
+esac
+
+exec "$JAVACMD" -Xmx64m -Xms64m $JAVA_OPTS $GRADLE_OPTS "-Dorg.gradle.appname=$APP_BASE_NAME" -jar "$WRAPPER_JAR" "$@"

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="berklin_background">#FF0D0B0A</color>
+    <color name="berklin_accent">#FFFF7A1A</color>
+    <color name="berklin_icon_background">#FFFF7A1A</color>
+</resources>

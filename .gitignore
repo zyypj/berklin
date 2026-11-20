@@ -1,0 +1,16 @@
+target/
+node_modules/
+ui/dist/
+app/gen/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/keystore.properties
+*.jks
+*.keystore
+relay/token.txt
+relay/node_modules/
+relay/dist/
+dist-release/
+.claude/

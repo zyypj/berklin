@@ -1,0 +1,18 @@
+{
+  "name": "berklin-ui",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "highlight.js": "^11.10.0",
+    "jsqr": "^1.4.0",
+    "marked": "^15.0.0",
+    "preact": "^10.24.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}
