@@ -1214,6 +1214,9 @@ impl Agent {
                     .unwrap_or_else(|| "sem próxima execução".into());
                 Ok(format!("Agendado \"{}\" (id {}). Próxima execução: {when}.", saved.name, saved.id))
             }
+            "open_browser" => tokio::task::spawn_blocking(crate::browser::ensure_browser_running)
+                .await
+                .map_err(|e| e.to_string())?,
             "list_schedules" => {
                 let inner = self.inner.lock();
                 Ok(serde_json::to_string_pretty(&inner.schedules).unwrap_or_default())

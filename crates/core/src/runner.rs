@@ -15,7 +15,8 @@ const UNATTENDED_PROMPT: &str = "Você está rodando em segundo plano pelo Berkl
 Quando encontrar algo que ele precisa saber (por exemplo um PR com mudanças pedidas, CI quebrado, um erro, uma tarefa concluída com resultado importante), \
 avise com a ferramenta notify_user do MCP berklin: título curto e uma mensagem objetiva, no idioma dele. \
 Quando precisar de uma decisão dele para continuar, use ask_user. Não notifique quando não houver nada novo. \
-O usuário pode responder às suas notificações; a resposta chega como uma nova mensagem nesta conversa.";
+O usuário pode responder às suas notificações; a resposta chega como uma nova mensagem nesta conversa. \
+Se as ferramentas do Claude in Chrome disserem que a extensão não está conectada, chame open_browser do MCP berklin, espere alguns segundos e tente de novo.";
 
 pub async fn start(
     agent: &Arc<Agent>,
@@ -45,6 +46,9 @@ pub async fn start(
     cmd.args(["--append-system-prompt", UNATTENDED_PROMPT]);
     if chrome {
         let _ = tokio::task::spawn_blocking(crate::browser::mirror_claude_native_host).await;
+        if let Ok(Err(e)) = tokio::task::spawn_blocking(crate::browser::ensure_browser_running).await {
+            agent.log(&format!("navegador: {e}"));
+        }
         cmd.arg("--chrome");
     }
     if resume.is_some() {

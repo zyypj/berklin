@@ -124,6 +124,11 @@ fn tools() -> Value {
             }
         },
         {
+            "name": "open_browser",
+            "description": "Open the user's browser that has the Claude in Chrome extension (Brave, Chrome or Edge, in that order) in the background, without a window, if none is running. Call it before using Claude in Chrome tools when they report the extension is not connected, then try those tools again.",
+            "inputSchema": { "type": "object", "properties": {} }
+        },
+        {
             "name": "list_schedules",
             "description": "List the schedules stored in Berklin.",
             "inputSchema": { "type": "object", "properties": {} }
