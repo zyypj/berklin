@@ -101,18 +101,23 @@ pub fn is_dev_build() -> bool {
 
 pub fn cleanup_old() {
     let Some(dir) = install_dir() else { return };
-    for f in FILES {
-        let _ = std::fs::remove_file(dir.join(format!("{f}.old")));
+    let Ok(entries) = std::fs::read_dir(&dir) else { return };
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.ends_with(".old") && FILES.iter().any(|f| name.starts_with(f)) {
+            let _ = std::fs::remove_file(e.path());
+        }
     }
 }
 
 fn swap_files(staging: &Path) -> Result<PathBuf, String> {
     let dir = install_dir().ok_or("pasta do app desconhecida")?;
+    cleanup_old();
+    let stamp = now_ms();
     let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
     for f in FILES {
         let target = dir.join(f);
-        let old = dir.join(format!("{f}.old"));
-        let _ = std::fs::remove_file(&old);
+        let old = dir.join(format!("{f}.{stamp}.old"));
         if target.exists() {
             if let Err(e) = std::fs::rename(&target, &old) {
                 for (t, o) in moved.iter().rev() {
