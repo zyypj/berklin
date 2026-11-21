@@ -1,7 +1,7 @@
 import { render } from "preact";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import "./style.css";
-import { S, boot, changed, fail, goBack, loadOlder, navigate, nativeConfig, openSession, req, toast, useStore } from "./store.js";
+import { S, boot, changed, fail, goBack, loadDashboard, loadOlder, navigate, nativeConfig, openSession, req, toast, useStore } from "./store.js";
 import { Markdown, Transcript, highlight, shortPath, toolSummary } from "./render.jsx";
 import jsQR from "jsqr";
 
@@ -283,6 +283,143 @@ function AwayCard() {
   );
 }
 
+const DAY_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function fmtEvery(min) {
+  if (!min) return "";
+  if (min % 60 === 0) return min === 60 ? "1 h" : `${min / 60} h`;
+  return `${min} min`;
+}
+
+function daysLabel(days) {
+  const d = [...(days || [])].sort();
+  if (!d.length || d.length === 7) return "Todo dia";
+  if (d.join() === "1,2,3,4,5") return "Seg–Sex";
+  if (d.join() === "0,6") return "Fim de semana";
+  return d.map((x) => DAY_SHORT[x]).join(", ");
+}
+
+function describeSchedule(x) {
+  if (x.every) {
+    const w = (x.windows || []).map((r) => `${r.from}–${r.to}`).join(" e ") || "o dia todo";
+    return `${daysLabel(x.days)} · ${w} · a cada ${fmtEvery(x.every)}`;
+  }
+  return x.cron ? describeCron(x.cron) : "Uma vez";
+}
+
+function DashData({ data }) {
+  const d = data && typeof data === "object" ? data : {};
+  const sections = Array.isArray(d.sections) ? d.sections : [];
+  const stats = Array.isArray(d.stats) ? d.stats : [];
+  return (
+    <div class="dash">
+      {d.subtitle ? <p class="dash-sub">{d.subtitle}</p> : null}
+      {stats.length ? (
+        <div class="tiles">
+          {stats.map((s, i) => (
+            <div key={i} class={"tile tone-" + (s.tone || "none")}>
+              <span class="tile-n">{String(s.value ?? "")}</span>
+              <span class="tile-l">{s.label}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {sections.map((sec, i) => (
+        <section key={i} class="card dash-sec">
+          {sec.title ? <h2>{sec.title}</h2> : null}
+          {sec.text ? <Markdown text={String(sec.text)} /> : null}
+          {Array.isArray(sec.items) && sec.items.length ? (
+            <div class="dash-items">
+              {sec.items.map((it, j) => (
+                <div key={j} class={"dash-item tone-" + (it.tone || "none")}>
+                  <div class="dash-item-h">
+                    <b>{it.link ? <a href={it.link}>{it.title}</a> : it.title}</b>
+                    {it.status ? <span class={"chip tone-" + (it.tone || "none")}>{it.status}</span> : null}
+                  </div>
+                  {it.text ? <p>{it.text}</p> : null}
+                  {it.meta ? <span class="muted">{it.meta}</span> : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {sec.table && Array.isArray(sec.table.columns) ? (
+            <div class="dash-table">
+              <table>
+                <thead>
+                  <tr>
+                    {sec.table.columns.map((c, k) => (
+                      <th key={k}>{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(sec.table.rows || []).map((r, k) => (
+                    <tr key={k}>
+                      {(Array.isArray(r) ? r : [r]).map((c, l) => (
+                        <td key={l}>{String(c ?? "")}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </section>
+      ))}
+      {d.footer ? <p class="muted">{d.footer}</p> : null}
+    </div>
+  );
+}
+
+function DashboardPage({ dkey }) {
+  const s = useStore();
+  const meta = s.dashboards.get(dkey);
+  const full = s.dashContent.get(dkey);
+  if (!meta) return <Empty title="Painel não encontrado" />;
+  return (
+    <div class="page">
+      <div class="sec-h">
+        <div>
+          <h1>{meta.title || meta.name}</h1>
+          <span class="muted">
+            {meta.name} · atualizado {rel(meta.ts)} ({when(meta.ts)})
+          </span>
+        </div>
+        <div class="row">
+          {meta.sid ? (
+            <button type="button" class="btn ghost small" onClick={() => openSession(meta.sid)}>Ver execução</button>
+          ) : null}
+          <button type="button" class="btn ghost small" onClick={() => loadDashboard(dkey)}>Recarregar</button>
+        </div>
+      </div>
+      {!full ? <div class="loading">Carregando painel…</div> : null}
+      {full && full.error ? <Empty title="Não consegui abrir">{full.error}</Empty> : null}
+      {full && full.kind === "html" ? <iframe class="dash-frame" sandbox="" srcdoc={String(full.content || "")} title={meta.title} /> : null}
+      {full && full.kind === "json" ? <DashData data={full.content} /> : null}
+    </div>
+  );
+}
+
+function DashboardsSection() {
+  const s = useStore();
+  const list = [...s.dashboards.values()].sort((a, b) => b.ts - a.ts);
+  if (!list.length) return null;
+  return (
+    <section>
+      <h2>Painéis</h2>
+      <div class="dash-grid">
+        {list.map((d) => (
+          <button type="button" key={d.key} class="dash-card" onClick={() => navigate({ name: "dashboard", key: d.key })}>
+            <b>{d.title || d.name}</b>
+            <span class="muted">{d.name}</span>
+            <span class="muted">atualizado {rel(d.ts)}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Home() {
   const s = useStore();
   const pending = [...s.pending.values()].sort((a, b) => b.ts - a.ts);
@@ -324,6 +461,7 @@ function Home() {
           </div>
         </section>
       ) : null}
+      <DashboardsSection />
       <section>
         <div class="sec-h">
           <h2>Em andamento</h2>
@@ -696,11 +834,17 @@ function toLocalInput(ms) {
 }
 
 function draftFrom(s) {
-  const base = { id: "", name: "", kind: "claude", prompt: "", cwd: "", enabled: true, mode: "default", notify: "claude", repeat: "once", date: toLocalInput(Date.now() + 3600000), time: "09:00", dow: "1", hours: "2", cron: "" };
+  const base = { id: "", name: "", kind: "claude", prompt: "", cwd: "", enabled: true, mode: "default", notify: "claude", repeat: "once", everyN: 1, everyUnit: "h", days: [1, 2, 3, 4, 5], windows: [{ from: "08:00", to: "12:00" }, { from: "13:00", to: "18:00" }], date: toLocalInput(Date.now() + 3600000), time: "09:00", dow: "1", hours: "2", cron: "" };
   if (!s) return base;
   const d = { ...base, ...s, cron: s.cron || "" };
   if (s.at) d.date = toLocalInput(s.at);
-  if (s.cron) {
+  if (s.every) {
+    d.repeat = "windows";
+    d.everyN = s.every % 60 === 0 ? s.every / 60 : s.every;
+    d.everyUnit = s.every % 60 === 0 ? "h" : "min";
+    d.days = s.days && s.days.length ? s.days : [0, 1, 2, 3, 4, 5, 6];
+    d.windows = s.windows && s.windows.length ? s.windows : [{ from: "00:00", to: "23:59" }];
+  } else if (s.cron) {
     const p = s.cron.trim().split(/\s+/);
     const [m, h, dom, mon, dow] = p;
     const timed = p.length === 5 && /^\d+$/.test(m) && /^\d+$/.test(h) && dom === "*" && mon === "*";
@@ -730,7 +874,15 @@ function ScheduleEditor({ initial, onDone }) {
     else if (d.repeat === "weekdays") sched.cron = `${mm} ${hh} * * 1-5`;
     else if (d.repeat === "weekly") sched.cron = `${mm} ${hh} * * ${d.dow}`;
     else if (d.repeat === "hours") sched.cron = `0 */${Math.max(1, Math.min(23, +d.hours || 1))} * * *`;
-    else sched.cron = d.cron;
+    else if (d.repeat === "windows") {
+      sched.every = Math.max(1, Math.round((+d.everyN || 1) * (d.everyUnit === "h" ? 60 : 1)));
+      sched.days = d.days;
+      sched.windows = d.windows.filter((w) => w.from && w.to);
+      if (!sched.days.length) {
+        toast("Escolha pelo menos um dia", "error");
+        return;
+      }
+    } else sched.cron = d.cron;
     setBusy(true);
     req("schedules.save", { schedule: sched })
       .then(() => {
@@ -795,9 +947,52 @@ function ScheduleEditor({ initial, onDone }) {
           <option value="weekdays">Dias úteis</option>
           <option value="weekly">Toda semana</option>
           <option value="hours">A cada N horas</option>
+          <option value="windows">Em dias e horários (ex.: Seg–Sex, 8h–12h e 13h–18h)</option>
           <option value="cron">Cron personalizado</option>
         </select>
       </label>
+      {d.repeat === "windows" ? (
+        <div class="stack">
+          <div class="daychips">
+            {DAY_SHORT.map((n, i) => {
+              const on = d.days.includes(i);
+              return (
+                <button
+                  type="button"
+                  key={i}
+                  class={"chip btnchip" + (on ? " on" : "")}
+                  onClick={() => setD({ ...d, days: on ? d.days.filter((x) => x !== i) : [...d.days, i].sort() })}
+                >
+                  {n}
+                </button>
+              );
+            })}
+          </div>
+          {d.windows.map((w, i) => (
+            <div class="row" key={i}>
+              <span class="muted">das</span>
+              <input class="input time" type="time" value={w.from} onInput={(e) => setD({ ...d, windows: d.windows.map((x, j) => (j === i ? { ...x, from: e.currentTarget.value } : x)) })} />
+              <span class="muted">às</span>
+              <input class="input time" type="time" value={w.to} onInput={(e) => setD({ ...d, windows: d.windows.map((x, j) => (j === i ? { ...x, to: e.currentTarget.value } : x)) })} />
+              {d.windows.length > 1 ? (
+                <button type="button" class="btn ghost small" onClick={() => setD({ ...d, windows: d.windows.filter((_, j) => j !== i) })}>Remover</button>
+              ) : null}
+            </div>
+          ))}
+          <div class="row">
+            <button type="button" class="btn ghost small" onClick={() => setD({ ...d, windows: [...d.windows, { from: "13:00", to: "18:00" }] })}>+ Faixa de horário</button>
+          </div>
+          <div class="row">
+            <span class="muted">Rodar a cada</span>
+            <input class="input num" type="number" min="1" value={d.everyN} onInput={set("everyN")} />
+            <select class="input num" value={d.everyUnit} onChange={set("everyUnit")}>
+              <option value="min">minutos</option>
+              <option value="h">horas</option>
+            </select>
+          </div>
+          <p class="muted">Roda no início de cada faixa e repete pelo intervalo até o fim dela (o fim conta).</p>
+        </div>
+      ) : null}
       {d.repeat === "once" ? <input class="input" type="datetime-local" value={d.date} onInput={set("date")} /> : null}
       {["daily", "weekdays", "weekly"].includes(d.repeat) ? (
         <div class="row">
@@ -856,7 +1051,7 @@ function Schedules() {
               </div>
               <p class="sched-p">{x.prompt}</p>
               <div class="sched-meta">
-                <span>{x.cron ? describeCron(x.cron) : "Uma vez"}</span>
+                <span>{describeSchedule(x)}</span>
                 <span>Próxima: {x.enabled ? when(x.nextRun) : "pausado"}</span>
                 {x.lastRun ? <span>Última: {when(x.lastRun)} {x.lastStatus ? `(${x.lastStatus})` : ""}</span> : null}
                 {x.kind === "claude" ? <span>{shortPath(x.cwd)}</span> : null}
@@ -864,6 +1059,9 @@ function Schedules() {
               <div class="row-end">
                 {x.lastSid ? (
                   <button type="button" class="btn ghost small" onClick={() => openSession(x.lastSid)}>Ver execução</button>
+                ) : null}
+                {s.dashboards.has(x.id) ? (
+                  <button type="button" class="btn primary small" onClick={() => navigate({ name: "dashboard", key: x.id })}>Painel</button>
                 ) : null}
                 <button type="button" class="btn ghost small" onClick={() => req("schedules.run", { sched: x.id }).then(() => toast("Executando")).catch(fail)}>Rodar agora</button>
                 <button type="button" class="btn ghost small" onClick={() => setEditing(x)}>Editar</button>
@@ -1392,8 +1590,13 @@ function TopBar() {
   const s = useStore();
   const v = s.view;
   const titles = { home: s.pc.name || "Berklin", sessions: "Sessões", schedules: "Agenda", settings: "Ajustes", new: "Novo chat" };
-  const sub = v.name === "session" ? s.sessions.get(v.sid)?.title || "Sessão" : titles[v.name];
-  const showBack = v.name === "session" || v.name === "new";
+  const sub =
+    v.name === "session"
+      ? s.sessions.get(v.sid)?.title || "Sessão"
+      : v.name === "dashboard"
+        ? s.dashboards.get(v.key)?.title || "Painel"
+        : titles[v.name];
+  const showBack = v.name === "session" || v.name === "new" || v.name === "dashboard";
   return (
     <header class="top">
       {showBack ? (
@@ -1459,6 +1662,8 @@ function Main() {
       return <Settings />;
     case "new":
       return <NewChat />;
+    case "dashboard":
+      return <DashboardPage key={v.key} dkey={v.key} />;
     default:
       return <Home />;
   }

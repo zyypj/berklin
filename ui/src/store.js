@@ -17,6 +17,8 @@ export const S = {
   config: null,
   native: null,
   appUpdate: null,
+  dashboards: new Map(),
+  dashContent: new Map(),
 };
 
 const listeners = new Set();
@@ -118,6 +120,15 @@ function onEvent(m) {
     case "away":
       S.away = m.a;
       break;
+    case "dashboard":
+      S.dashboards.set(m.d.key, m.d);
+      S.dashContent.delete(m.d.key);
+      if (S.view.name === "dashboard" && S.view.key === m.d.key) loadDashboard(m.d.key);
+      break;
+    case "dashboard.gone":
+      S.dashboards.delete(m.key);
+      S.dashContent.delete(m.key);
+      break;
     default:
       return;
   }
@@ -145,6 +156,7 @@ function applySnapshot(d) {
   const known = new Set(S.notes.map((n) => n.nid));
   const extra = (d.notes || []).filter((n) => !known.has(n.nid)).reverse();
   S.notes = [...extra, ...S.notes].slice(0, 60);
+  if (d.dashboards) S.dashboards = new Map(d.dashboards.map((x) => [x.key, x]));
   S.ready = true;
   changed();
   if (S.view.name === "session" && S.view.sid) loadSession(S.view.sid, true);
@@ -185,6 +197,18 @@ export function loadOlder(sid) {
   });
 }
 
+export function loadDashboard(key) {
+  req("dashboard.get", { key })
+    .then((d) => {
+      S.dashContent.set(key, d);
+      changed();
+    })
+    .catch((e) => {
+      S.dashContent.set(key, { error: e.message });
+      changed();
+    });
+}
+
 export function navigate(view, replace = false) {
   if (S.view.name === "session" && S.view.sid && (view.name !== "session" || view.sid !== S.view.sid)) {
     req("session.close", { sid: S.view.sid }).catch(() => {});
@@ -193,6 +217,7 @@ export function navigate(view, replace = false) {
   if (!replace) S.stack.push(S.view);
   S.view = view;
   if (view.name === "session") loadSession(view.sid, true);
+  if (view.name === "dashboard") loadDashboard(view.key);
   changed();
 }
 

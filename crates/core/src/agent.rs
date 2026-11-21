@@ -66,6 +66,7 @@ pub struct Agent {
     next_conn: AtomicU64,
     pub relay_online: AtomicBool,
     pub update: Mutex<crate::update::UpdateState>,
+    pub dashboards: Mutex<HashMap<String, crate::dashboard::Dashboard>>,
     pub update_wake: Notify,
     pub restart: Notify,
 }
@@ -98,6 +99,7 @@ impl Agent {
             .and_then(|b| serde_json::from_slice(&b).ok())
             .unwrap_or_default();
         let (alerts, _) = broadcast::channel(64);
+        let dashboards = crate::dashboard::load_all(&paths.dir);
         Arc::new(Agent {
             paths,
             cfg: RwLock::new(cfg),
@@ -124,6 +126,7 @@ impl Agent {
             next_conn: AtomicU64::new(1),
             relay_online: AtomicBool::new(false),
             update: Mutex::new(crate::update::UpdateState::default()),
+            dashboards: Mutex::new(dashboards),
             update_wake: Notify::new(),
             restart: Notify::new(),
         })
@@ -701,7 +704,54 @@ impl Agent {
             "pending": pending,
             "schedules": inner.schedules,
             "notes": inner.notes,
+            "dashboards": self.dashboard_metas(),
         })
+    }
+
+    pub fn dashboard_metas(&self) -> Vec<Value> {
+        let map = self.dashboards.lock();
+        let mut list: Vec<&crate::dashboard::Dashboard> = map.values().collect();
+        list.sort_unstable_by(|a, b| b.ts.cmp(&a.ts));
+        list.iter().map(|d| d.meta()).collect()
+    }
+
+    pub fn remove_dashboard(&self, key: &str) {
+        if self.dashboards.lock().remove(key).is_some() {
+            crate::dashboard::remove(&self.paths.dir, key);
+            let inner = self.inner.lock();
+            let msg = ev("dashboard.gone", json!({ "key": key }));
+            self.emit_all(&inner, msg);
+        }
+    }
+
+    fn publish_dashboard(&self, sid: Option<String>, schedule: Option<String>, args: &Value) -> Result<String, String> {
+        let (kind, content, title) = crate::dashboard::content_from_args(args)?;
+        let sched_name = schedule
+            .as_ref()
+            .and_then(|id| self.inner.lock().schedules.iter().find(|s| &s.id == id).map(|s| s.name.clone()));
+        let key = match (&schedule, &sid) {
+            (Some(id), _) => id.clone(),
+            (None, Some(s)) => format!("s-{s}"),
+            (None, None) => "geral".to_string(),
+        };
+        let name = sched_name.unwrap_or_else(|| sid.as_deref().map(|x| self.session_title(x)).unwrap_or_else(|| "Claude".into()));
+        let d = crate::dashboard::Dashboard {
+            key: key.clone(),
+            title: if title.is_empty() { name.clone() } else { title },
+            name,
+            ts: now_ms(),
+            kind,
+            sched: schedule,
+            sid,
+            content,
+        };
+        crate::dashboard::save(&self.paths.dir, &d)?;
+        let meta = d.meta();
+        self.dashboards.lock().insert(key, d);
+        let inner = self.inner.lock();
+        let msg = ev("dashboard", json!({ "d": meta }));
+        self.emit_all(&inner, msg);
+        Ok("Painel publicado no app Berklin.".into())
     }
 
     pub async fn handle_text(self: &Arc<Self>, conn: u64, text: &str) {
@@ -825,6 +875,17 @@ impl Agent {
             "schedules.delete" => {
                 let id = s("sched").ok_or("sched")?;
                 scheduler::delete(self, &id);
+                self.remove_dashboard(&id);
+                Ok(Value::Null)
+            }
+            "dashboards.list" => Ok(json!(self.dashboard_metas())),
+            "dashboard.get" => {
+                let key = s("key").ok_or("key")?;
+                self.dashboards.lock().get(&key).map(|d| json!(d)).ok_or_else(|| "Painel não encontrado.".to_string())
+            }
+            "dashboard.delete" => {
+                let key = s("key").ok_or("key")?;
+                self.remove_dashboard(&key);
                 Ok(Value::Null)
             }
             "schedules.run" => {
@@ -1142,8 +1203,12 @@ impl Agent {
     pub async fn tool(self: &Arc<Self>, name: &str, args: Value) -> Result<String, String> {
         let s = |k: &str| args.get(k).and_then(Value::as_str).map(str::to_string);
         let cwd = s("cwd").unwrap_or_default();
-        let sid = self.guess_sid(&cwd);
+        let sid = s("_sid").filter(|x| !x.is_empty()).or_else(|| self.guess_sid(&cwd));
+        let schedule = s("_schedule").filter(|x| !x.is_empty()).or_else(|| {
+            sid.as_ref().and_then(|x| self.inner.lock().runs.get(x).and_then(|r| r.schedule.clone()))
+        });
         match name {
+            "publish_dashboard" => self.publish_dashboard(sid, schedule, &args),
             "notify_user" => {
                 let msg = s("message").ok_or("message é obrigatório")?;
                 let title = s("title").unwrap_or_else(|| sid.as_deref().map(|x| self.session_title(x)).unwrap_or_else(|| "Claude".into()));
@@ -1204,6 +1269,19 @@ impl Agent {
                     mode: s("mode").unwrap_or_else(default_mode),
                     notify: s("notify").filter(|n| n == "always").unwrap_or_else(|| "claude".into()),
                     chrome: args.get("chrome").and_then(Value::as_bool).unwrap_or(false),
+                    every: args.get("every_minutes").and_then(Value::as_u64).map(|m| m as u32),
+                    days: parse_days(args.get("days")),
+                    windows: args
+                        .get("windows")
+                        .and_then(Value::as_array)
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(Value::as_str)
+                                .filter_map(|w| w.split_once('-'))
+                                .map(|(f, t)| Window { from: f.trim().to_string(), to: t.trim().to_string() })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                     ..Default::default()
                 };
                 let saved = scheduler::save(self, sched)?;
@@ -1237,6 +1315,23 @@ impl Agent {
             .max_by_key(|s| (s.status == Status::Running, s.updated))
             .map(|s| s.sid.clone())
     }
+}
+
+fn parse_days(v: Option<&Value>) -> Vec<u8> {
+    const NAMES: [&str; 7] = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+    const EN: [&str; 7] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    let Some(Value::Array(a)) = v else { return Vec::new() };
+    a.iter()
+        .filter_map(|d| match d {
+            Value::Number(n) => n.as_u64().map(|n| (n % 7) as u8),
+            Value::String(s) => {
+                let s = s.trim().to_lowercase();
+                let s = s.replace('á', "a");
+                NAMES.iter().position(|n| s.starts_with(n)).or_else(|| EN.iter().position(|n| s.starts_with(n))).map(|i| i as u8)
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 pub fn describe_tool(tool: &str, input: &Value) -> String {

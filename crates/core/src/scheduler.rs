@@ -44,9 +44,60 @@ fn cron_next(expr: &str, after_ms: i64) -> Result<Option<i64>, String> {
     Ok(sched.after(&after).next().map(|d| d.timestamp_millis()))
 }
 
+fn parse_hm(t: &str) -> Option<u32> {
+    let (h, m) = t.trim().split_once(':')?;
+    let (h, m): (u32, u32) = (h.parse().ok()?, m.parse().ok()?);
+    (h < 24 && m < 60).then_some(h * 60 + m)
+}
+
+fn window_ranges(s: &Schedule) -> Result<Vec<(u32, u32)>, String> {
+    if s.windows.is_empty() {
+        return Ok(vec![(0, 23 * 60 + 59)]);
+    }
+    s.windows
+        .iter()
+        .map(|w| match (parse_hm(&w.from), parse_hm(&w.to)) {
+            (Some(a), Some(b)) if a <= b => Ok((a, b)),
+            _ => Err(format!("Faixa de horário inválida: {} às {}", w.from, w.to)),
+        })
+        .collect()
+}
+
+fn windows_next(s: &Schedule, every: u32, after_ms: i64) -> Result<Option<i64>, String> {
+    use chrono::Datelike;
+    let every = every.max(1);
+    let ranges = window_ranges(s)?;
+    let days: Vec<u8> = if s.days.is_empty() { (0..7).collect() } else { s.days.clone() };
+    let mut minutes: Vec<u32> = ranges.iter().flat_map(|(a, b)| (*a..=*b).step_by(every as usize)).collect();
+    minutes.sort_unstable();
+    minutes.dedup();
+    let after = Local.timestamp_millis_opt(after_ms).single().unwrap_or_else(Local::now);
+    for offset in 0..9 {
+        let date = after.date_naive() + chrono::Duration::days(offset);
+        if !days.contains(&(date.weekday().num_days_from_sunday() as u8)) {
+            continue;
+        }
+        for m in &minutes {
+            let Some(naive) = date.and_hms_opt(m / 60, m % 60, 0) else { continue };
+            let Some(at) = Local.from_local_datetime(&naive).earliest() else { continue };
+            if at.timestamp_millis() > after_ms {
+                return Ok(Some(at.timestamp_millis()));
+            }
+        }
+    }
+    Ok(None)
+}
+
+pub fn is_recurring(s: &Schedule) -> bool {
+    s.every.is_some() || s.cron.is_some()
+}
+
 fn compute_next(s: &Schedule, after_ms: i64) -> Result<Option<i64>, String> {
     if !s.enabled {
         return Ok(None);
+    }
+    if let Some(every) = s.every {
+        return windows_next(s, every, after_ms);
     }
     if let Some(expr) = s.cron.as_deref().filter(|c| !c.trim().is_empty()) {
         return cron_next(expr.trim(), after_ms);
@@ -76,7 +127,21 @@ pub fn save(agent: &Arc<Agent>, mut s: Schedule) -> Result<Schedule, String> {
     }
     if s.cron.as_deref().map(|c| c.trim().is_empty()).unwrap_or(true) {
         s.cron = None;
-        if s.at.is_none() {
+    }
+    if let Some(every) = s.every {
+        if every == 0 || every > 24 * 60 {
+            return Err("O intervalo deve ficar entre 1 minuto e 24 horas.".into());
+        }
+        s.cron = None;
+        s.at = None;
+        s.days.sort_unstable();
+        s.days.dedup();
+        s.days.retain(|d| *d < 7);
+        window_ranges(&s)?;
+    } else {
+        s.days.clear();
+        s.windows.clear();
+        if s.cron.is_none() && s.at.is_none() {
             return Err("Defina a data/hora ou a recorrência.".into());
         }
     }
@@ -168,7 +233,7 @@ pub async fn run(agent: Arc<Agent>) {
         let now = now_ms();
         for s in inner.schedules.iter_mut() {
             s.next_run = compute_next(s, now).ok().flatten();
-            if s.cron.is_none() && s.at.map(|a| a < now - 60_000).unwrap_or(false) && s.enabled {
+            if !is_recurring(s) && s.at.map(|a| a < now - 60_000).unwrap_or(false) && s.enabled {
                 s.next_run = Some(now);
             }
         }
@@ -182,7 +247,7 @@ pub async fn run(agent: Arc<Agent>) {
             for s in inner.schedules.iter_mut() {
                 if s.enabled && s.next_run.map(|n| n <= now).unwrap_or(false) {
                     s.last_run = Some(now);
-                    if s.cron.is_none() {
+                    if !is_recurring(s) {
                         s.enabled = false;
                         s.next_run = None;
                     } else {

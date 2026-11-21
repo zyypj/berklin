@@ -1,6 +1,6 @@
 {
   "productName": "Berklin",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "identifier": "dev.zyypj.berklin",
   "build": {
     "frontendDist": "../ui/dist"

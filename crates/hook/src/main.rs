@@ -106,7 +106,7 @@ fn tools() -> Value {
         },
         {
             "name": "schedule_task",
-            "description": "Schedule something for later in Berklin. kind \"claude\" (default) starts a new headless Claude Code session that runs `prompt` inside directory `dir` at the scheduled time (write the prompt so that run uses notify_user only when it finds something worth telling); with notify \"claude\" (default) the user is only notified when that run calls notify_user or fails, with notify \"always\" also on every completion; kind \"reminder\" only sends the user a notification with `prompt`. Give `at` (local date-time, e.g. 2026-11-21T09:00:00) for a one-shot or `cron` (5 fields, local time, e.g. \"0 9 * * 1-5\") for a recurring schedule.",
+            "description": "Schedule something for later in Berklin. kind \"claude\" (default) starts a new headless Claude Code session that runs `prompt` inside directory `dir` at the scheduled time (write the prompt so that run uses notify_user only when it finds something worth telling); with notify \"claude\" (default) the user is only notified when that run calls notify_user or fails, with notify \"always\" also on every completion; kind \"reminder\" only sends the user a notification with `prompt`. When: `at` (local date-time, e.g. 2026-11-21T09:00:00) for a one-shot; or `every_minutes` with optional `days` and `windows` for runs inside working hours (e.g. every_minutes 60, days [1,2,3,4,5], windows [\"08:00-12:00\",\"13:00-18:00\"] runs Mon-Fri at 8,9,10,11,12,13..18); or `cron` (5 fields, local time) for anything else.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -118,9 +118,24 @@ fn tools() -> Value {
                     "dir": { "type": "string", "description": "Working directory for kind claude. Defaults to the current project." },
                     "mode": { "type": "string", "enum": ["default", "acceptEdits", "plan", "auto", "bypassPermissions"] },
                     "notify": { "type": "string", "enum": ["claude", "always"] },
-                    "chrome": { "type": "boolean", "description": "Give the scheduled run Claude in Chrome (the user's Chrome with the extension must be open). Use for web apps without an API, like Monday through the browser." }
+                    "chrome": { "type": "boolean", "description": "Give the scheduled run Claude in Chrome (Berklin opens the browser with the extension if needed). Use for web apps without an API, like Monday through the browser." },
+                    "every_minutes": { "type": "integer", "description": "Repeat interval in minutes (1-1440)." },
+                    "days": { "type": "array", "items": { "type": "integer" }, "description": "Weekdays, 0=Sunday ... 6=Saturday. Empty = every day." },
+                    "windows": { "type": "array", "items": { "type": "string" }, "description": "Time ranges \"HH:MM-HH:MM\"; runs start at each range start and repeat every_minutes up to the range end (inclusive). Empty = all day." }
                 },
                 "required": ["prompt"]
+            }
+        },
+        {
+            "name": "publish_dashboard",
+            "description": "Publish (replace) the dashboard of this scheduled task or session in the Berklin app, so the user can read the current state at a glance on the phone or PC. Prefer `data` (JSON rendered natively by the app); use `html` (HTML + CSS, no JavaScript, runs sandboxed) only if you need a special layout. Show the full current picture, not only what changed. `data` shape: {\"title\": str, \"subtitle\": str?, \"stats\": [{\"label\": str, \"value\": str, \"tone\": \"ok\"|\"warn\"|\"bad\"|\"info\"?}], \"sections\": [{\"title\": str, \"items\": [{\"title\": str, \"text\": str?, \"status\": str?, \"tone\": str?, \"link\": url?, \"meta\": str?}], \"table\": {\"columns\": [str], \"rows\": [[str]]}?, \"text\": markdown?}], \"footer\": str?}.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "title": { "type": "string" },
+                    "data": { "type": "object", "description": "Dashboard JSON (see description)." },
+                    "html": { "type": "string", "description": "Alternative: full HTML with inline CSS, no scripts." }
+                }
             }
         },
         {
@@ -140,6 +155,11 @@ fn call_tool(name: &str, mut args: Value) -> Value {
     if let Value::Object(m) = &mut args {
         if let Ok(cwd) = std::env::current_dir() {
             m.entry("cwd").or_insert(Value::String(cwd.to_string_lossy().into_owned()));
+        }
+        for (key, var) in [("_sid", "BERKLIN_SESSION_ID"), ("_schedule", "BERKLIN_SCHEDULE_ID")] {
+            if let Ok(v) = std::env::var(var) {
+                m.insert(key.into(), Value::String(v));
+            }
         }
     } else {
         args = json!({});

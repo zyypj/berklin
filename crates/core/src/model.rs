@@ -130,6 +130,12 @@ pub struct Schedule {
     #[serde(default)]
     pub chrome: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub every: Option<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub days: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub windows: Vec<Window>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_run: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_run: Option<i64>,
@@ -145,6 +151,12 @@ fn default_schedule_kind() -> String {
 
 fn default_true() -> bool {
     true
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct Window {
+    pub from: String,
+    pub to: String,
 }
 
 pub fn default_notify() -> String {

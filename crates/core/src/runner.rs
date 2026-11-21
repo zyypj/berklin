@@ -11,6 +11,11 @@ use tokio::sync::{mpsc, oneshot};
 use crate::agent::{Agent, Run};
 
 const IDLE_CLOSE: Duration = Duration::from_secs(20 * 60);
+const SCHEDULE_PROMPT: &str = "Esta é uma execução de um agendamento do Berklin. No fim de TODA execução, mesmo sem novidade, \
+publique o painel do agendamento com publish_dashboard do MCP berklin: o retrato completo e atual do que você acompanha \
+(não só o que mudou), fácil de ler no celular em poucos segundos. Prefira `data` (JSON com title, subtitle, stats, sections e footer); \
+use `html` (HTML + CSS, sem JavaScript) só se precisar de um layout especial. Destaque o que pede ação do usuário, use tone \
+ok/warn/bad/info e inclua links. No footer, diga quando foi a verificação.";
 const UNATTENDED_PROMPT: &str = "Você está rodando em segundo plano pelo Berklin; o usuário não está olhando esta conversa. \
 Quando encontrar algo que ele precisa saber (por exemplo um PR com mudanças pedidas, CI quebrado, um erro, uma tarefa concluída com resultado importante), \
 avise com a ferramenta notify_user do MCP berklin: título curto e uma mensagem objetiva, no idioma dele. \
@@ -43,7 +48,15 @@ pub async fn start(
         cmd.env_remove(key);
     }
     cmd.args(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-mode", &mode]);
-    cmd.args(["--append-system-prompt", UNATTENDED_PROMPT]);
+    let system = match &schedule {
+        Some(_) => format!("{UNATTENDED_PROMPT} {SCHEDULE_PROMPT}"),
+        None => UNATTENDED_PROMPT.to_string(),
+    };
+    cmd.args(["--append-system-prompt", &system]);
+    cmd.env("BERKLIN_SESSION_ID", &sid);
+    if let Some(id) = &schedule {
+        cmd.env("BERKLIN_SCHEDULE_ID", id);
+    }
     if chrome {
         let _ = tokio::task::spawn_blocking(crate::browser::mirror_claude_native_host).await;
         if let Ok(Err(e)) = tokio::task::spawn_blocking(crate::browser::ensure_browser_running).await {

@@ -2,6 +2,7 @@ pub mod agent;
 pub mod away;
 pub mod browser;
 pub mod config;
+pub mod dashboard;
 pub mod install;
 pub mod model;
 pub mod power;
