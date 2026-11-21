@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod away;
+pub mod browser;
 pub mod config;
 pub mod install;
 pub mod model;
@@ -44,6 +45,12 @@ pub async fn start(hook_exe: PathBuf) -> Result<Arc<Agent>, String> {
     tokio::spawn(away::run(agent.clone()));
     tokio::spawn(update::run(agent.clone()));
     power::spawn_keep_awake(agent.clone());
+    let mirror_agent = agent.clone();
+    tokio::task::spawn_blocking(move || {
+        for key in browser::mirror_claude_native_host() {
+            mirror_agent.log(&format!("ponte do Claude in Chrome registrada em {key}"));
+        }
+    });
 
     let auto_install = std::env::var_os("BERKLIN_NO_AUTOINSTALL").is_none();
     if auto_install && !install::hooks_installed(&agent) && agent.hook_exe.is_file() {

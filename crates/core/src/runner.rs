@@ -44,6 +44,7 @@ pub async fn start(
     cmd.args(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-mode", &mode]);
     cmd.args(["--append-system-prompt", UNATTENDED_PROMPT]);
     if chrome {
+        let _ = tokio::task::spawn_blocking(crate::browser::mirror_claude_native_host).await;
         cmd.arg("--chrome");
     }
     if resume.is_some() {

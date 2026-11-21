@@ -782,7 +782,7 @@ function ScheduleEditor({ initial, onDone }) {
           </label>
           <label class="check">
             <input type="checkbox" checked={!!d.chrome} onChange={(e) => setD({ ...d, chrome: e.currentTarget.checked })} />
-            Usar o Chrome (Claude in Chrome; o Chrome com a extensão precisa estar aberto)
+            Usar o navegador (extensão Claude in Chrome no Chrome, Brave ou Edge, que precisa estar aberto)
           </label>
           <p class="muted">Peça no texto o que ele deve te avisar, por exemplo: "se algum PR tiver mudanças pedidas, me avise". Você pode responder direto na notificação.</p>
         </>
