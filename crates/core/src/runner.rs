@@ -24,17 +24,28 @@ pub async fn start(
     text: String,
     mode: String,
     schedule: Option<String>,
+    chrome: bool,
 ) -> Result<String, String> {
     let sid = resume.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    if agent.inner.lock().runs.contains_key(&sid) {
-        return Err("Essa sessão já está rodando.".into());
-    }
+    let chrome = {
+        let mut inner = agent.inner.lock();
+        if inner.runs.contains_key(&sid) {
+            return Err("Essa sessão já está rodando.".into());
+        }
+        if chrome {
+            inner.chrome_sids.insert(sid.clone());
+        }
+        chrome || inner.chrome_sids.contains(&sid)
+    };
     let mut cmd = Command::new(agent.claude_path());
     for key in inherited_session_env() {
         cmd.env_remove(key);
     }
     cmd.args(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-mode", &mode]);
     cmd.args(["--append-system-prompt", UNATTENDED_PROMPT]);
+    if chrome {
+        cmd.arg("--chrome");
+    }
     if resume.is_some() {
         cmd.args(["--resume", &sid]);
     } else {

@@ -117,7 +117,8 @@ fn tools() -> Value {
                     "cron": { "type": "string" },
                     "dir": { "type": "string", "description": "Working directory for kind claude. Defaults to the current project." },
                     "mode": { "type": "string", "enum": ["default", "acceptEdits", "plan", "auto", "bypassPermissions"] },
-                    "notify": { "type": "string", "enum": ["claude", "always"] }
+                    "notify": { "type": "string", "enum": ["claude", "always"] },
+                    "chrome": { "type": "boolean", "description": "Give the scheduled run Claude in Chrome (the user's Chrome with the extension must be open). Use for web apps without an API, like Monday through the browser." }
                 },
                 "required": ["prompt"]
             }

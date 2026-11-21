@@ -153,7 +153,7 @@ async fn fire(agent: &Arc<Agent>, s: Schedule) {
     if s.notify != "claude" {
         agent.note("schedule", format!("Agendamento iniciado: {}", s.name), one_line(&s.prompt, 200), None, None);
     }
-    match runner::start(agent, None, s.cwd.clone(), s.prompt.clone(), s.mode.clone(), Some(s.id.clone())).await {
+    match runner::start(agent, None, s.cwd.clone(), s.prompt.clone(), s.mode.clone(), Some(s.id.clone()), s.chrome).await {
         Ok(sid) => mark(agent, &s.id, "rodando", Some(&sid)),
         Err(e) => {
             mark(agent, &s.id, "erro", None);

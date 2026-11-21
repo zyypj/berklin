@@ -50,6 +50,7 @@ pub struct Inner {
     away_since: Instant,
     conns: HashMap<u64, Conn>,
     pub runs: HashMap<String, Run>,
+    pub chrome_sids: HashSet<String>,
 }
 
 pub struct Agent {
@@ -112,6 +113,7 @@ impl Agent {
                 away_since: Instant::now(),
                 conns: HashMap::new(),
                 runs: HashMap::new(),
+                chrome_sids: HashSet::new(),
             }),
             tx_cmd: Mutex::new(tx_cmd),
             relay_out,
@@ -928,7 +930,8 @@ impl Agent {
             if cwd.is_empty() || !Path::new(&cwd).is_dir() {
                 return Err("Escolha uma pasta válida para o novo chat.".into());
             }
-            let sid = runner::start(self, None, cwd, text, mode, None).await?;
+            let chrome = v.get("chrome").and_then(Value::as_bool).unwrap_or(false);
+            let sid = runner::start(self, None, cwd, text, mode, None, chrome).await?;
             return Ok(json!({ "sid": sid, "how": "started" }));
         };
         let stop_pid = {
@@ -958,7 +961,7 @@ impl Agent {
         if cwd.is_empty() || !Path::new(&cwd).is_dir() {
             return Err("A pasta dessa sessão não existe mais.".into());
         }
-        runner::start(self, Some(sid.clone()), cwd, text, mode, None).await?;
+        runner::start(self, Some(sid.clone()), cwd, text, mode, None, false).await?;
         Ok(json!({ "sid": sid, "how": "resumed" }))
     }
 
@@ -1200,6 +1203,7 @@ impl Agent {
                     enabled: true,
                     mode: s("mode").unwrap_or_else(default_mode),
                     notify: s("notify").filter(|n| n == "always").unwrap_or_else(|| "claude".into()),
+                    chrome: args.get("chrome").and_then(Value::as_bool).unwrap_or(false),
                     ..Default::default()
                 };
                 let saved = scheduler::save(self, sched)?;

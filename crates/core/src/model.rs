@@ -127,6 +127,8 @@ pub struct Schedule {
     pub mode: String,
     #[serde(default = "default_notify")]
     pub notify: String,
+    #[serde(default)]
+    pub chrome: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_run: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
