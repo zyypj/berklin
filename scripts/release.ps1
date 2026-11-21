@@ -12,12 +12,14 @@ if (-not $NoBuild) {
     Pop-Location
     Push-Location $root
     cargo build --release
+    if ($LASTEXITCODE -ne 0) { throw 'build do Rust falhou' }
     Pop-Location
     Push-Location (Join-Path $root 'relay')
     node build.mjs
     Pop-Location
     Push-Location (Join-Path $root 'android')
-    .\gradlew.bat assembleRelease --console=plain
+    .\gradlew.bat clean assembleRelease --console=plain --no-daemon
+    if ($LASTEXITCODE -ne 0) { throw 'build do Android falhou' }
     Pop-Location
 }
 

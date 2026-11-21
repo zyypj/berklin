@@ -696,7 +696,7 @@ function toLocalInput(ms) {
 }
 
 function draftFrom(s) {
-  const base = { id: "", name: "", kind: "claude", prompt: "", cwd: "", enabled: true, mode: "default", repeat: "once", date: toLocalInput(Date.now() + 3600000), time: "09:00", dow: "1", hours: "2", cron: "" };
+  const base = { id: "", name: "", kind: "claude", prompt: "", cwd: "", enabled: true, mode: "default", notify: "claude", repeat: "once", date: toLocalInput(Date.now() + 3600000), time: "09:00", dow: "1", hours: "2", cron: "" };
   if (!s) return base;
   const d = { ...base, ...s, cron: s.cron || "" };
   if (s.at) d.date = toLocalInput(s.at);
@@ -724,7 +724,7 @@ function ScheduleEditor({ initial, onDone }) {
   const set = (k) => (e) => setD({ ...d, [k]: e.currentTarget.type === "checkbox" ? e.currentTarget.checked : e.currentTarget.value });
   const save = () => {
     const [hh, mm] = (d.time || "09:00").split(":").map(Number);
-    const sched = { id: d.id || undefined, name: d.name, kind: d.kind, prompt: d.prompt, cwd: d.cwd, enabled: true, mode: d.mode };
+    const sched = { id: d.id || undefined, name: d.name, kind: d.kind, prompt: d.prompt, cwd: d.cwd, enabled: true, mode: d.mode, notify: d.notify };
     if (d.repeat === "once") sched.at = new Date(d.date).getTime();
     else if (d.repeat === "daily") sched.cron = `${mm} ${hh} * * *`;
     else if (d.repeat === "weekdays") sched.cron = `${mm} ${hh} * * 1-5`;
@@ -776,6 +776,11 @@ function ScheduleEditor({ initial, onDone }) {
               ))}
             </select>
           </label>
+          <label class="check">
+            <input type="checkbox" checked={d.notify !== "always"} onChange={(e) => setD({ ...d, notify: e.currentTarget.checked ? "claude" : "always" })} />
+            Só avisar quando o Claude encontrar algo (ou der erro)
+          </label>
+          <p class="muted">Peça no texto o que ele deve te avisar, por exemplo: "se algum PR tiver mudanças pedidas, me avise". Você pode responder direto na notificação.</p>
         </>
       ) : null}
       <label class="field">

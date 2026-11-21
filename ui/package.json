@@ -1,7 +1,7 @@
 {
   "name": "berklin-ui",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch"

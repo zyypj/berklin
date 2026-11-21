@@ -8,6 +8,10 @@ import org.json.JSONObject
 
 class NotificationActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == ACTION_REPLY_SESSION) {
+            replyToSession(context, intent)
+            return
+        }
         if (intent.action != ACTION_RESOLVE) return
         val pid = intent.getStringExtra(EXTRA_PID) ?: return
         val tag = intent.getStringExtra(EXTRA_TAG)
@@ -17,6 +21,18 @@ class NotificationActionReceiver : BroadcastReceiver() {
             RelayService.start(context)
         }
         if (tag != null && request != null) ClaudeNotifier(context).cancelByTag(tag)
+    }
+
+    private fun replyToSession(context: Context, intent: Intent) {
+        val sid = intent.getStringExtra(EXTRA_SID) ?: return
+        val reply = RemoteInput.getResultsFromIntent(intent)
+            ?.getCharSequence(KEY_REPLY_TEXT)
+            ?.toString()
+            ?.trim()
+        if (reply.isNullOrEmpty()) return
+        RelayHub.submitNativeRequest(JSONObject().put("op", "send").put("sid", sid).put("text", reply))
+        RelayService.start(context)
+        intent.getStringExtra(EXTRA_TAG)?.let { ClaudeNotifier(context).cancelByTag(it) }
     }
 
     private fun buildResolveRequest(intent: Intent, pid: String): JSONObject? {
@@ -48,6 +64,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_RESOLVE = "dev.zyypj.berklin.action.RESOLVE_PENDING"
+        const val ACTION_REPLY_SESSION = "dev.zyypj.berklin.action.REPLY_SESSION"
+        const val EXTRA_SID = "sid"
         const val EXTRA_PID = "pid"
         const val EXTRA_TAG = "tag"
         const val EXTRA_PENDING_KIND = "pendingKind"

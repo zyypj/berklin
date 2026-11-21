@@ -11,6 +11,11 @@ use tokio::sync::{mpsc, oneshot};
 use crate::agent::{Agent, Run};
 
 const IDLE_CLOSE: Duration = Duration::from_secs(20 * 60);
+const UNATTENDED_PROMPT: &str = "Você está rodando em segundo plano pelo Berklin; o usuário não está olhando esta conversa. \
+Quando encontrar algo que ele precisa saber (por exemplo um PR com mudanças pedidas, CI quebrado, um erro, uma tarefa concluída com resultado importante), \
+avise com a ferramenta notify_user do MCP berklin: título curto e uma mensagem objetiva, no idioma dele. \
+Quando precisar de uma decisão dele para continuar, use ask_user. Não notifique quando não houver nada novo. \
+O usuário pode responder às suas notificações; a resposta chega como uma nova mensagem nesta conversa.";
 
 pub async fn start(
     agent: &Arc<Agent>,
@@ -29,6 +34,7 @@ pub async fn start(
         cmd.env_remove(key);
     }
     cmd.args(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-mode", &mode]);
+    cmd.args(["--append-system-prompt", UNATTENDED_PROMPT]);
     if resume.is_some() {
         cmd.args(["--resume", &sid]);
     } else {

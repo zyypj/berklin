@@ -1079,7 +1079,17 @@ impl Agent {
         let title = self.session_title(sid);
         if let Some(id) = schedule {
             scheduler::mark(self, &id, if ok { "ok" } else { "erro" }, Some(sid));
-            let name = self.inner.lock().schedules.iter().find(|s| s.id == id).map(|s| s.name.clone()).unwrap_or(title.clone());
+            let (name, quiet) = self
+                .inner
+                .lock()
+                .schedules
+                .iter()
+                .find(|s| s.id == id)
+                .map(|s| (s.name.clone(), s.notify == "claude"))
+                .unwrap_or((title.clone(), false));
+            if ok && quiet {
+                return;
+            }
             self.note(
                 if ok { "schedule" } else { "error" },
                 format!("Agendamento {}: {name}", if ok { "concluído" } else { "falhou" }),
@@ -1189,6 +1199,7 @@ impl Agent {
                     cron: s("cron"),
                     enabled: true,
                     mode: s("mode").unwrap_or_else(default_mode),
+                    notify: s("notify").filter(|n| n == "always").unwrap_or_else(|| "claude".into()),
                     ..Default::default()
                 };
                 let saved = scheduler::save(self, sched)?;

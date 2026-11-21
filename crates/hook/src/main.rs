@@ -82,7 +82,7 @@ fn tools() -> Value {
     json!([
         {
             "name": "notify_user",
-            "description": "Send a push notification to the user's phone and PC through the Berklin app. Use it when the user may be away from the computer and should know something now: a long task finished, you are blocked, or something needs their attention.",
+            "description": "Send a push notification to the user's phone and PC through the Berklin app. Use it whenever you find something the user should know now: a PR got change requests, CI broke, a long task finished with a relevant result, you are blocked. Keep it short and concrete. The user can reply from the notification; the reply arrives as a new message in this conversation. Do not notify when nothing changed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -106,7 +106,7 @@ fn tools() -> Value {
         },
         {
             "name": "schedule_task",
-            "description": "Schedule something for later in Berklin. kind \"claude\" (default) starts a new headless Claude Code session that runs `prompt` inside directory `dir` at the scheduled time and notifies the user when it finishes; kind \"reminder\" only sends the user a notification with `prompt`. Give `at` (local date-time, e.g. 2026-11-21T09:00:00) for a one-shot or `cron` (5 fields, local time, e.g. \"0 9 * * 1-5\") for a recurring schedule.",
+            "description": "Schedule something for later in Berklin. kind \"claude\" (default) starts a new headless Claude Code session that runs `prompt` inside directory `dir` at the scheduled time (write the prompt so that run uses notify_user only when it finds something worth telling); with notify \"claude\" (default) the user is only notified when that run calls notify_user or fails, with notify \"always\" also on every completion; kind \"reminder\" only sends the user a notification with `prompt`. Give `at` (local date-time, e.g. 2026-11-21T09:00:00) for a one-shot or `cron` (5 fields, local time, e.g. \"0 9 * * 1-5\") for a recurring schedule.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -116,7 +116,8 @@ fn tools() -> Value {
                     "at": { "type": "string" },
                     "cron": { "type": "string" },
                     "dir": { "type": "string", "description": "Working directory for kind claude. Defaults to the current project." },
-                    "mode": { "type": "string", "enum": ["default", "acceptEdits", "plan", "auto", "bypassPermissions"] }
+                    "mode": { "type": "string", "enum": ["default", "acceptEdits", "plan", "auto", "bypassPermissions"] },
+                    "notify": { "type": "string", "enum": ["claude", "always"] }
                 },
                 "required": ["prompt"]
             }
@@ -178,7 +179,7 @@ fn run_mcp() {
                         "protocolVersion": version,
                         "capabilities": { "tools": {} },
                         "serverInfo": { "name": "berklin", "version": env!("CARGO_PKG_VERSION") },
-                        "instructions": "Berklin connects you to the user's phone. Use notify_user to tell them about important events while they are away, ask_user when you need their decision, and schedule_task when they ask you to do or remind something later."
+                        "instructions": "Berklin connects you to the user's phone. Use notify_user to tell them about anything important you find (they can reply from the notification), ask_user when you need their decision, and schedule_task when they ask you to do or remind something later."
                     }
                 }));
             }

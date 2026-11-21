@@ -125,6 +125,8 @@ pub struct Schedule {
     pub enabled: bool,
     #[serde(default = "default_mode")]
     pub mode: String,
+    #[serde(default = "default_notify")]
+    pub notify: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_run: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -141,6 +143,10 @@ fn default_schedule_kind() -> String {
 
 fn default_true() -> bool {
     true
+}
+
+pub fn default_notify() -> String {
+    "always".into()
 }
 
 pub fn default_mode() -> String {

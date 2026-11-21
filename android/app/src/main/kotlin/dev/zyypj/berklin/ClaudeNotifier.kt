@@ -138,7 +138,10 @@ class ClaudeNotifier(context: Context) {
         val tag = NOTE_TAG_PREFIX + nid
         val title = note.optString("title").ifEmpty { "Berklin" }
         val body = note.optString("body")
-        val notification = Notification.Builder(appContext, CHANNEL_NOTICES)
+        val kind = note.optString("kind")
+        val sid = note.optString("sid").ifEmpty { null }
+        val channel = if (kind == "info" || kind == "needs") CHANNEL_NEEDS_YOU else CHANNEL_NOTICES
+        val builder = Notification.Builder(appContext, channel)
             .setSmallIcon(R.drawable.ic_stat_berklin)
             .setContentTitle(title)
             .setContentText(body)
@@ -147,9 +150,25 @@ class ClaudeNotifier(context: Context) {
             .setAutoCancel(true)
             .setShowWhen(true)
             .setWhen(note.optLong("ts", System.currentTimeMillis()).takeIf { it > 0 } ?: System.currentTimeMillis())
-            .setContentIntent(openAppIntent(note.optString("sid").ifEmpty { null }, tag.hashCode()))
+            .setContentIntent(openAppIntent(sid, tag.hashCode()))
+        if (sid != null) builder.addAction(sessionReplyAction(sid, tag))
+        manager.notify(tag, NOTE_NOTIFICATION_ID, builder.build())
+    }
+
+    private fun sessionReplyAction(sid: String, tag: String): Notification.Action {
+        val intent = Intent(appContext, NotificationActionReceiver::class.java)
+            .setAction(NotificationActionReceiver.ACTION_REPLY_SESSION)
+            .putExtra(NotificationActionReceiver.EXTRA_SID, sid)
+            .putExtra(NotificationActionReceiver.EXTRA_TAG, tag)
+        val mutableFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+        val pendingIntent = PendingIntent.getBroadcast(appContext, (tag + "#reply").hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag)
+        val remoteInput = RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY_TEXT)
+            .setLabel("Responder ao Claude")
             .build()
-        manager.notify(tag, NOTE_NOTIFICATION_ID, notification)
+        return Notification.Action.Builder(Icon.createWithResource(appContext, R.drawable.ic_stat_berklin), "Responder", pendingIntent)
+            .addRemoteInput(remoteInput)
+            .setAllowGeneratedReplies(false)
+            .build()
     }
 
     private fun buildAction(action: PendingAction, pid: String, tag: String, pendingKind: String, index: Int): Notification.Action {
